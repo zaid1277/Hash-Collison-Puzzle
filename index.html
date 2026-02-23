@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hash Collision Explorer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --bg: #0e0e12;
+    --surface: #16161d;
+    --surface2: #1e1e28;
+    --border: #2e2e3e;
+    --accent: #e8ff47;
+    --accent2: #ff6b6b;
+    --accent3: #6bffda;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --slot-empty: #1a1a24;
+    --slot-filled: #1e2a1a;
+    --slot-highlight: #2a2a10;
+    --chain-color: #ff9f43;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(232,255,71,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(232,255,71,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 36px;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .title-block h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .title-block h1 span { color: var(--accent); }
+  .title-block p {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .seg-group {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .seg-group button {
+    background: transparent;
+    border: none;
+    padding: 8px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-right: 1px solid var(--border);
+  }
+  .seg-group button:last-child { border-right: none; }
+  .seg-group button.active {
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
+  }
+  .seg-group button:hover:not(.active) {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .btn-refresh {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--accent3);
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  .btn-refresh:hover {
+    background: var(--accent3);
+    color: #000;
+    border-color: var(--accent3);
+  }
+
+  /* Technique tabs */
+  .technique-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+
+  .tab {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.02em;
+  }
+  .tab.active {
+    background: var(--surface2);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .tab:hover:not(.active) {
+    border-color: var(--muted);
+    color: var(--text);
+  }
+
+  /* Formula bar */
+  .formula-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 18px;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .formula-bar .label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .formula-bar .formula {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--accent3);
+  }
+  .formula-bar .desc {
+    font-size: 0.8rem;
+    color: var(--text);
+    flex: 1;
+  }
+
+  /* Main game area */
+  .game-area {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 800px) {
+    .game-area { grid-template-columns: 1fr; }
+  }
+
+  /* Draggable keys */
+  .keys-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .keys-panel h3 {
+    font-size: 0.75rem;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .keys-tray {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 48px;
+  }
+  .key-chip {
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-family: 'Space Mono', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    cursor: grab;
+    user-select: none;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .key-chip:active { cursor: grabbing; }
+  .key-chip.dragging {
+    opacity: 0.4;
+    transform: scale(0.96);
+  }
+  .key-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .key-chip .hint {
+    font-size: 0.6rem;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .key-chip.used {
+    opacity: 0.25;
+    pointer-events: none;
+    text-decoration: line-through;
+  }
+
+  /* Hash table */
+  .table-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .table-panel h3 {
+    font-size: 0.75rem;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .table-panel h3 span {
+    color: var(--accent);
+  }
+
+  .hash-table {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* Linear/Quadratic/Double Hashing slot */
+  .slot {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    min-height: 48px;
+    transition: all 0.15s;
+  }
+  .slot-index {
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    border-right: 1px solid var(--border);
+    font-weight: 700;
+  }
+  .slot-content {
+    background: var(--slot-empty);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    min-height: 48px;
+    transition: all 0.15s;
+  }
+  .slot.drag-over .slot-content {
+    background: var(--slot-highlight);
+    border-color: var(--accent);
+  }
+  .slot.drag-over {
+    border-color: var(--accent);
+  }
+  .slot.correct .slot-content {
+    background: var(--slot-filled);
+    border-color: #4caf50;
+  }
+  .slot.correct {
+    border-color: #4caf50;
+  }
+  .slot.wrong .slot-content {
+    background: #2a1a1a;
+  }
+  .slot.wrong {
+    border-color: var(--accent2);
+    animation: shake 0.3s ease;
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+  }
+
+  .slot-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .slot-value .remove-btn {
+    background: none;
+    border: none;
+    color: var(--accent2);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0 4px;
+    opacity: 0.5;
+    transition: opacity 0.1s;
+  }
+  .slot-value .remove-btn:hover { opacity: 1; }
+
+  /* Chaining table */
+  .chain-slot {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    min-height: 52px;
+    transition: all 0.15s;
+    margin-bottom: 4px;
+  }
+  .chain-slot.drag-over {
+    border-color: var(--chain-color);
+  }
+  .chain-slot.drag-over .chain-content {
+    background: #2a2010;
+  }
+  .chain-content {
+    background: var(--slot-empty);
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 52px;
+  }
+  .chain-node {
+    background: var(--surface2);
+    border: 2px solid var(--chain-color);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--chain-color);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+  }
+  .chain-node::after {
+    content: '→';
+    position: absolute;
+    right: -16px;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .chain-node:last-child::after { display: none; }
+  .chain-node.wrong {
+    border-color: var(--accent2);
+    color: var(--accent2);
+    animation: shake 0.3s ease;
+  }
+  .chain-node.correct {
+    border-color: #4caf50;
+    color: #4caf50;
+  }
+  .chain-node .rm {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.75rem;
+    opacity: 0.6;
+    padding: 0;
+  }
+  .chain-node .rm:hover { opacity: 1; }
+
+  /* Sidebar */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+  }
+  .info-card h3 {
+    font-size: 0.7rem;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .step-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    line-height: 1.5;
+  }
+  .step-item .key-label {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+  .step-item .formula-text {
+    color: var(--muted);
+    margin-top: 2px;
+    word-break: break-all;
+  }
+  .step-item .result {
+    color: var(--accent3);
+    margin-top: 2px;
+  }
+
+  /* Progress */
+  .progress-bar-wrap {
+    background: var(--surface2);
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+  .progress-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  /* Answer key */
+  .answer-key {
+    margin-top: 16px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .answer-row {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #2a4a2a;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+  }
+  .answer-row .ar-idx {
+    background: #1a3a1a;
+    color: #4caf50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    padding: 7px 0;
+    border-right: 1px solid #2a4a2a;
+  }
+  .answer-row .ar-content {
+    background: #111f11;
+    padding: 7px 12px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .answer-row .ar-val {
+    color: var(--accent3);
+    font-weight: 700;
+  }
+  .answer-row .ar-working {
+    color: var(--muted);
+    font-size: 0.68rem;
+  }
+  .answer-row.empty .ar-content { color: var(--muted); }
+
+  /* Victory */
+  .victory-banner {
+    display: none;
+    background: linear-gradient(135deg, #1a2a10, #0e1a0a);
+    border: 2px solid #4caf50;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  .victory-banner.show { display: block; }
+  @keyframes popIn {
+    from { transform: scale(0.8); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
+  }
+  .victory-banner h2 {
+    font-size: 1.4rem;
+    color: #4caf50;
+    margin-bottom: 4px;
+  }
+  .victory-banner p {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(60px);
+    background: var(--accent2);
+    color: #fff;
+    padding: 10px 22px;
+    border-radius: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    transition: transform 0.3s ease;
+    z-index: 999;
+    pointer-events: none;
+  }
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast.good {
+    background: #2d6a2d;
+    border: 1px solid #4caf50;
+  }
+
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="title-block">
+      <h1>HASH <span>COLLISION</span> EXPLORER</h1>
+      <p>// drag numbers into the correct table slots</p>
+    </div>
+    <div class="controls">
+      <div class="seg-group" id="diff-group">
+        <button class="active" data-diff="easy">Easy</button>
+        <button data-diff="medium">Medium</button>
+        <button data-diff="hard">Hard</button>
+      </div>
+      <button class="btn-refresh" id="btn-refresh">⟳ New Puzzle</button>
+    </div>
+  </div>
+
+  <div class="technique-tabs">
+    <button class="tab active" data-tech="linear_probing">Linear Probing</button>
+    <button class="tab" data-tech="quadratic_probing">Quadratic Probing</button>
+    <button class="tab" data-tech="double_hashing">Double Hashing</button>
+    <button class="tab" data-tech="chaining">Separate Chaining</button>
+  </div>
+
+  <div class="formula-bar">
+    <span class="label">FORMULA</span>
+    <span class="formula" id="formula-text">h(k, i) = (k mod m + i) mod m</span>
+    <span class="desc" id="desc-text">On collision, probe the next available slot linearly.</span>
+  </div>
+
+  <div id="loading" class="loading">GENERATING PUZZLE...</div>
+
+  <div id="main-content" style="display:none">
+    <div class="game-area">
+      <div>
+        <div class="keys-panel">
+          <h3>Keys to Insert (drag into table)</h3>
+          <div class="keys-tray" id="keys-tray"></div>
+        </div>
+        <div style="margin-top:16px" class="table-panel">
+          <h3>Hash Table — m = <span id="table-size-label">?</span></h3>
+          <div class="hash-table" id="hash-table"></div>
+        </div>
+        <div style="margin-top:16px" id="victory-banner" class="victory-banner">
+          <div id="victory-header-perfect" class="victory-header">
+            <h2>✓ PERFECT!</h2>
+            <p>All keys placed correctly. Here's the full worked solution:</p>
+          </div>
+          <div id="victory-header-partial" class="victory-header" style="display:none">
+            <h2 style="color:var(--accent2)">✗ NOT QUITE</h2>
+            <p>All keys placed — some were wrong. Correct answers shown below in <span style="color:#4caf50">green</span>, your wrong ones in <span style="color:var(--accent2)">red</span>:</p>
+          </div>
+          <div id="answer-key" class="answer-key"></div>
+          <p style="margin-top:12px;color:var(--muted)">Hit "New Puzzle" to try again.</p>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="info-card">
+          <h3>Progress</h3>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+          </div>
+          <div class="progress-label" id="progress-label">0 / 0 placed correctly</div>
+        </div>
+        <div class="info-card">
+          <h3>Working to do ✍ (formula, not answer)</h3>
+          <div class="step-list" id="step-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let puzzle = null;
+let technique = 'linear_probing';
+let difficulty = 'easy';
+let tableState = {};  // index -> value (open addressing) or index -> [values] (chaining)
+let totalCorrect = 0;
+
+// ─── Fetch & Render ───────────────────────────────────────────────
+
+async function loadPuzzle() {
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('main-content').style.display = 'none';
+  const banner = document.getElementById('victory-banner');
+  banner.classList.remove('show');
+  banner.style.borderColor = '';
+  banner.style.background = '';
+
+  try {
+    const res = await fetch(`/api/puzzle?technique=${technique}&difficulty=${difficulty}`);
+    puzzle = await res.json();
+    tableState = {};
+    totalCorrect = 0;
+    render();
+  } catch(e) {
+    showToast('Failed to load puzzle', false);
+  }
+}
+
+function render() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+
+  document.getElementById('formula-text').textContent = puzzle.formula_label;
+  document.getElementById('desc-text').textContent = puzzle.description;
+  document.getElementById('table-size-label').textContent = puzzle.table_size;
+
+  renderKeys();
+  renderTable();
+  renderSteps();
+  updateProgress();
+}
+
+function renderKeys() {
+  const tray = document.getElementById('keys-tray');
+  tray.innerHTML = '';
+  puzzle.keys.forEach(k => {
+    const chip = document.createElement('div');
+    chip.className = 'key-chip';
+    chip.draggable = true;
+    chip.dataset.key = k;
+    chip.id = `key-${k}`;
+
+    chip.innerHTML = `<span>${k}</span>`;
+
+    chip.addEventListener('dragstart', onDragStart);
+    tray.appendChild(chip);
+  });
+}
+
+function renderTable() {
+  const container = document.getElementById('hash-table');
+  container.innerHTML = '';
+
+  if (puzzle.technique === 'chaining') {
+    renderChainTable(container);
+  } else {
+    renderOpenAddressingTable(container);
+  }
+}
+
+function renderOpenAddressingTable(container) {
+  for (let i = 0; i < puzzle.table_size; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    slot.dataset.index = i;
+
+    const idx = document.createElement('div');
+    idx.className = 'slot-index';
+    idx.textContent = i;
+
+    const content = document.createElement('div');
+    content.className = 'slot-content';
+
+    if (tableState[i] !== undefined) {
+      const isCorrect = puzzle.solution[i] === tableState[i];
+      slot.classList.add(isCorrect ? 'correct' : 'wrong');
+      content.innerHTML = `<div class="slot-value">
+        <span>${tableState[i]}</span>
+        <button class="remove-btn" onclick="removeFromSlot(${i})">✕</button>
+      </div>`;
+    }
+
+    slot.addEventListener('dragover', e => { e.preventDefault(); slot.classList.add('drag-over'); });
+    slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
+    slot.addEventListener('drop', e => onDropSlot(e, i));
+
+    slot.appendChild(idx);
+    slot.appendChild(content);
+    container.appendChild(slot);
+  }
+}
+
+function renderChainTable(container) {
+  for (let i = 0; i < puzzle.table_size; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'chain-slot';
+    slot.dataset.index = i;
+
+    const idx = document.createElement('div');
+    idx.className = 'slot-index';
+    idx.textContent = i;
+
+    const content = document.createElement('div');
+    content.className = 'chain-content';
+
+    const placed = tableState[i] || [];
+    placed.forEach((v, pos) => {
+      const isCorrect = puzzle.solution[i] && puzzle.solution[i].includes(v);
+      const node = document.createElement('div');
+      node.className = 'chain-node' + (isCorrect ? ' correct' : ' wrong');
+      node.innerHTML = `${v}<button class="rm" onclick="removeFromChain(${i},${pos})">✕</button>`;
+      content.appendChild(node);
+    });
+
+    slot.addEventListener('dragover', e => { e.preventDefault(); slot.classList.add('drag-over'); });
+    slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
+    slot.addEventListener('drop', e => onDropChain(e, i));
+
+    slot.appendChild(idx);
+    slot.appendChild(content);
+    container.appendChild(slot);
+  }
+}
+
+function renderSteps() {
+  const list = document.getElementById('step-list');
+  list.innerHTML = '';
+  puzzle.steps.forEach((s, i) => {
+    const item = document.createElement('div');
+    item.className = 'step-item';
+    if (s.error) {
+      item.innerHTML = `<div class="key-label">${s.key}</div><div class="formula-text" style="color:var(--accent2)">${s.error}</div>`;
+    } else {
+      // Split pipe-separated formula lines
+      const lines = (s.formula || '').split(' | ').map(l => `<div class="formula-text">${l}</div>`).join('');
+      const collisionNote = s.collisions > 0
+        ? `<div class="formula-text" style="color:var(--accent2)">⚡ ${s.collisions} collision(s) before placing</div>` : '';
+      item.innerHTML = `<div class="key-label">Key: ${s.key}</div>${lines}${collisionNote}`;
+    }
+    list.appendChild(item);
+  });
+}
+
+function updateProgress() {
+  let correct = 0;
+  let totalPlaced = 0;
+  const total = puzzle.keys.length;
+
+  if (puzzle.technique === 'chaining') {
+    for (let i = 0; i < puzzle.table_size; i++) {
+      const placed = tableState[i] || [];
+      const expected = puzzle.solution[i] || [];
+      totalPlaced += placed.length;
+      placed.forEach(v => { if (expected.includes(v)) correct++; });
+    }
+  } else {
+    for (let i = 0; i < puzzle.table_size; i++) {
+      if (tableState[i] !== undefined) {
+        totalPlaced++;
+        if (puzzle.solution[i] === tableState[i]) correct++;
+      }
+    }
+  }
+
+  const pct = total > 0 ? (correct / total) * 100 : 0;
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = `${correct} / ${total} placed correctly`;
+
+  const allPlaced = totalPlaced >= total;
+
+  if (correct === total && total > 0) {
+    // Perfect score
+    document.getElementById('victory-banner').classList.add('show');
+    document.getElementById('victory-banner').dataset.state = 'perfect';
+    markUsedKeys();
+    renderAnswerKey(true);
+  } else if (allPlaced && correct < total) {
+    // All placed but some wrong — reveal answers
+    document.getElementById('victory-banner').classList.add('show');
+    document.getElementById('victory-banner').dataset.state = 'partial';
+    renderAnswerKey(false);
+  } else {
+    document.getElementById('victory-banner').classList.remove('show');
+  }
+}
+
+function markUsedKeys() {
+  // Mark all chips as used on victory
+  document.querySelectorAll('.key-chip').forEach(c => c.classList.add('used'));
+}
+
+function renderAnswerKey(perfect) {
+  // Toggle header
+  document.getElementById('victory-header-perfect').style.display = perfect ? 'block' : 'none';
+  document.getElementById('victory-header-partial').style.display = perfect ? 'none' : 'block';
+
+  // Update banner border color for partial
+  const banner = document.getElementById('victory-banner');
+  if (!perfect) {
+    banner.style.borderColor = 'var(--accent2)';
+    banner.style.background = 'linear-gradient(135deg, #2a1010, #1a0a0a)';
+  } else {
+    banner.style.borderColor = '#4caf50';
+    banner.style.background = 'linear-gradient(135deg, #1a2a10, #0e1a0a)';
+  }
+
+  const container = document.getElementById('answer-key');
+  container.innerHTML = '';
+
+  const stepByKey = {};
+  puzzle.steps.forEach(s => { if (!s.error) stepByKey[s.key] = s; });
+
+  if (puzzle.technique === 'chaining') {
+    for (let i = 0; i < puzzle.table_size; i++) {
+      const expected = puzzle.solution[i] || [];
+      const placed = tableState[i] || [];
+      if (expected.length === 0 && placed.length === 0) continue;
+
+      const row = document.createElement('div');
+      row.className = 'answer-row';
+      const working = expected.map(k => `${k} mod ${puzzle.table_size} = ${i}`).join(' | ');
+
+      // For each expected key, mark if user got it right or wrong
+      const keySpans = expected.map(k => {
+        const userHasIt = placed.includes(k);
+        const color = userHasIt ? '#4caf50' : 'var(--accent2)';
+        const label = userHasIt ? k : `${k} ✗`;
+        return `<span style="color:${color};font-weight:700">${label}</span>`;
+      }).join(' <span style="color:var(--muted)">→</span> ');
+
+      row.innerHTML = `
+        <div class="ar-idx">${i}</div>
+        <div class="ar-content" style="flex-direction:column;align-items:flex-start;gap:3px">
+          <div>${keySpans}</div>
+          <div class="ar-working">${working}</div>
+        </div>`;
+      container.appendChild(row);
+    }
+  } else {
+    for (let i = 0; i < puzzle.table_size; i++) {
+      const correctVal = puzzle.solution[i];
+      const userVal = tableState[i];
+      if (correctVal === null && userVal === undefined) continue;
+
+      const row = document.createElement('div');
+      row.className = 'answer-row';
+
+      let working = '';
+      if (correctVal !== null) {
+        const s = stepByKey[correctVal];
+        if (s) {
+          const h0 = correctVal % puzzle.table_size;
+          if (s.collisions === 0) {
+            working = `${correctVal} mod ${puzzle.table_size} = ${h0} ✓ free`;
+          } else if (puzzle.technique === 'linear_probing') {
+            working = `${correctVal} mod ${puzzle.table_size} = ${h0}, +${s.collisions} linear → slot ${i}`;
+          } else if (puzzle.technique === 'quadratic_probing') {
+            const probeSteps = [];
+            for (let p = 0; p <= s.collisions; p++) {
+              probeSteps.push(`i=${p}: (${h0}+${p*p}) mod ${puzzle.table_size}=${((h0+p*p)%puzzle.table_size)}`);
+            }
+            working = probeSteps.join(' | ');
+          } else if (puzzle.technique === 'double_hashing') {
+            const h2v = 1 + (correctVal % (puzzle.table_size - 1));
+            if (s.collisions === 0) {
+              working = `h1=${h0}, h2=${h2v} → slot ${i}`;
+            } else {
+              working = `h1=${h0}, h2=${h2v}, i=${s.collisions}: (${h0}+${s.collisions}×${h2v}) mod ${puzzle.table_size}=${i}`;
+            }
+          }
+        }
+      }
+
+      const isRight = (correctVal === userVal);
+      const isWrong = (userVal !== undefined && userVal !== correctVal);
+
+      let valueHtml = '';
+      if (correctVal !== null) {
+        if (isRight) {
+          valueHtml = `<span class="ar-val" style="color:#4caf50">${correctVal} ✓</span>`;
+        } else if (isWrong) {
+          // Show what they put AND what was correct
+          valueHtml = `<span class="ar-val" style="color:var(--accent2)">${userVal} ✗</span>
+                       <span class="ar-val" style="color:#4caf50;margin-left:8px">→ should be ${correctVal}</span>`;
+        } else {
+          valueHtml = `<span class="ar-val" style="color:#4caf50">${correctVal}</span>`;
+        }
+      } else if (isWrong) {
+        // User placed something in an empty slot
+        valueHtml = `<span class="ar-val" style="color:var(--accent2)">${userVal} ✗</span>
+                     <span class="ar-val" style="color:var(--muted);margin-left:8px">→ should be empty</span>`;
+      } else {
+        valueHtml = `<span style="color:var(--muted)">—</span>`;
+      }
+
+      row.innerHTML = `
+        <div class="ar-idx">${i}</div>
+        <div class="ar-content">
+          ${valueHtml}
+          ${working ? `<span class="ar-working">${working}</span>` : ''}
+        </div>`;
+      container.appendChild(row);
+    }
+  }
+}
+
+// ─── Drag & Drop ──────────────────────────────────────────────────
+
+let draggedKey = null;
+
+function onDragStart(e) {
+  draggedKey = parseInt(e.currentTarget.dataset.key);
+  e.currentTarget.classList.add('dragging');
+  setTimeout(() => e.currentTarget.classList.remove('dragging'), 0);
+}
+
+function onDropSlot(e, index) {
+  e.preventDefault();
+  const slot = document.querySelector(`.slot[data-index="${index}"]`);
+  slot.classList.remove('drag-over');
+
+  if (draggedKey === null) return;
+
+  // Already occupied?
+  if (tableState[index] !== undefined) {
+    showToast('Slot already occupied! Remove first.', false);
+    return;
+  }
+
+  // Check if key already placed somewhere else
+  const alreadyAt = Object.entries(tableState).find(([k, v]) => v === draggedKey);
+  if (alreadyAt) {
+    showToast('Key already placed! Remove it first.', false);
+    return;
+  }
+
+  tableState[index] = draggedKey;
+  const isCorrect = puzzle.solution[index] === draggedKey;
+
+  // Mark chip as used if correct
+  const chip = document.getElementById(`key-${draggedKey}`);
+  if (chip && isCorrect) chip.classList.add('used');
+
+  renderTable();
+  updateProgress();
+
+  if (!isCorrect) {
+    showToast(`✗ Wrong slot for ${draggedKey}`, false);
+  } else {
+    showToast(`✓ Correct!`, true);
+  }
+  draggedKey = null;
+}
+
+function onDropChain(e, index) {
+  e.preventDefault();
+  const slot = document.querySelector(`.chain-slot[data-index="${index}"]`);
+  slot.classList.remove('drag-over');
+
+  if (draggedKey === null) return;
+
+  // Check if already in any chain
+  for (let i = 0; i < puzzle.table_size; i++) {
+    if (tableState[i] && tableState[i].includes(draggedKey)) {
+      showToast('Key already placed! Remove it first.', false);
+      return;
+    }
+  }
+
+  if (!tableState[index]) tableState[index] = [];
+  tableState[index].push(draggedKey);
+
+  const isCorrect = puzzle.solution[index] && puzzle.solution[index].includes(draggedKey);
+  if (isCorrect) {
+    const chip = document.getElementById(`key-${draggedKey}`);
+    if (chip) chip.classList.add('used');
+    showToast(`✓ Correct!`, true);
+  } else {
+    showToast(`✗ ${draggedKey} doesn't hash to slot ${index}`, false);
+  }
+
+  renderTable();
+  updateProgress();
+  draggedKey = null;
+}
+
+function removeFromSlot(index) {
+  const val = tableState[index];
+  delete tableState[index];
+  // Un-use chip
+  const chip = document.getElementById(`key-${val}`);
+  if (chip) chip.classList.remove('used');
+  renderTable();
+  updateProgress();
+}
+
+function removeFromChain(index, pos) {
+  const val = tableState[index][pos];
+  tableState[index].splice(pos, 1);
+  const chip = document.getElementById(`key-${val}`);
+  if (chip) chip.classList.remove('used');
+  renderTable();
+  updateProgress();
+}
+
+// ─── UI Events ────────────────────────────────────────────────────
+
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    technique = t.dataset.tech;
+    loadPuzzle();
+  });
+});
+
+document.querySelectorAll('#diff-group button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#diff-group button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    difficulty = b.dataset.diff;
+    loadPuzzle();
+  });
+});
+
+document.getElementById('btn-refresh').addEventListener('click', loadPuzzle);
+
+// ─── Toast ────────────────────────────────────────────────────────
+
+let toastTimer;
+function showToast(msg, good) {
+  const t = document.getElementById('toast');
+  clearTimeout(toastTimer);
+  t.textContent = msg;
+  t.className = 'toast show' + (good ? ' good' : '');
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────
+loadPuzzle();
+</script>
+</body>
+</html>
